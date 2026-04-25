@@ -1,4 +1,4 @@
-namespace ClockApp;
+namespace Clock2;
 
 public sealed class ClockState
 {

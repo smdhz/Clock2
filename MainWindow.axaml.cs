@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Input;
 using Avalonia.Markup.Xaml;
 
-namespace ClockApp;
+namespace Clock2;
 
 public partial class MainWindow : Window
 {
@@ -11,9 +11,6 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
-        TransparencyLevelHint = [WindowTransparencyLevel.Transparent];
-        ExtendClientAreaToDecorationsHint = true;
-        ExtendClientAreaTitleBarHeightHint = 0;
         ContextMenu = CreateContextMenu();
         PointerPressed += OnPointerPressed;
     }

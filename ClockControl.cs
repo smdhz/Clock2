@@ -3,7 +3,7 @@ using Avalonia.Controls;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
-namespace ClockApp;
+namespace Clock2;
 
 public sealed class ClockControl : Control
 {

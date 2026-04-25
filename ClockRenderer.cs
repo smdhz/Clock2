@@ -1,7 +1,7 @@
 using Avalonia;
 using Avalonia.Media;
 
-namespace ClockApp;
+namespace Clock2;
 
 public sealed class ClockRenderer
 {

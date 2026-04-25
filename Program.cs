@@ -1,6 +1,6 @@
 using Avalonia;
 
-namespace ClockApp;
+namespace Clock2;
 
 internal static class Program
 {
