@@ -15,6 +15,7 @@ internal static class Program
     {
         return AppBuilder.Configure<App>()
             .UsePlatformDetect()
-            .WithInterFont();
+            // Keep GPU rendering but cap Skia's GPU resource cache; a 210px clock needs very little.
+            .With(new SkiaOptions { MaxGpuResourceSizeBytes = 4 * 1024 * 1024 });
     }
 }

@@ -1,6 +1,11 @@
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace Clock2;
+
+// Generates the JSON code at compile time, so settings still work after AOT/trimming.
+[JsonSerializable(typeof(AppSettings))]
+internal partial class AppSettingsJson : JsonSerializerContext;
 
 public sealed class AppSettings
 {
@@ -23,7 +28,7 @@ public sealed class AppSettings
         {
             if (File.Exists(FilePath))
             {
-                return JsonSerializer.Deserialize<AppSettings>(File.ReadAllText(FilePath)) ?? new AppSettings();
+                return JsonSerializer.Deserialize(File.ReadAllText(FilePath), AppSettingsJson.Default.AppSettings) ?? new AppSettings();
             }
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException or JsonException)
@@ -39,7 +44,7 @@ public sealed class AppSettings
         try
         {
             Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
-            File.WriteAllText(FilePath, JsonSerializer.Serialize(this));
+            File.WriteAllText(FilePath, JsonSerializer.Serialize(this, AppSettingsJson.Default.AppSettings));
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
