@@ -4,8 +4,6 @@
         x:Class="Clock2.MainWindow"
         Width="210"
         Height="210"
-        MinWidth="140"
-        MinHeight="140"
         Background="Transparent"
         TransparencyLevelHint="Transparent"
         CanResize="False"

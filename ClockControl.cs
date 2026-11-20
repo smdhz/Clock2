@@ -1,5 +1,6 @@
 using Avalonia;
 using Avalonia.Controls;
+using Avalonia.Media;
 using Avalonia.Styling;
 using Avalonia.Threading;
 
@@ -7,46 +8,55 @@ namespace Clock2;
 
 public sealed class ClockControl : Control
 {
+    public static readonly StyledProperty<bool> ShowSecondHandProperty =
+        AvaloniaProperty.Register<ClockControl, bool>(nameof(ShowSecondHand), true);
+
     private static readonly TimeSpan FrameInterval = TimeSpan.FromMilliseconds(16);
+
+    // Wake slightly after the second boundary so DateTime.Now has already ticked over.
+    private static readonly TimeSpan SecondBoundarySlack = TimeSpan.FromMilliseconds(2);
 
     private readonly ClockRenderer _renderer = new();
     private readonly ClockState _state = new();
     private readonly DispatcherTimer _timer;
 
+    static ClockControl()
+    {
+        AffectsRender<ClockControl>(ShowSecondHandProperty);
+    }
+
     public ClockControl()
     {
         ClipToBounds = false;
 
-        _timer = new DispatcherTimer(DispatcherPriority.Render)
-        {
-            Interval = FrameInterval
-        };
-        _timer.Tick += OnFrame;
+        _timer = new DispatcherTimer(DispatcherPriority.Render);
+        _timer.Tick += (_, _) => Tick();
 
-        AttachedToVisualTree += (_, _) =>
-        {
-            _state.Update(DateTime.Now);
-            _timer.Start();
-            InvalidateVisual();
-        };
-
-        DetachedFromVisualTree += (_, _) => _timer.Stop();
+        ActualThemeVariantChanged += (_, _) => InvalidateVisual();
     }
 
     public bool ShowSecondHand
     {
-        get => _state.ShowSecondHand;
-        set
-        {
-            _state.ShowSecondHand = value;
-            InvalidateVisual();
-        }
+        get => GetValue(ShowSecondHandProperty);
+        set => SetValue(ShowSecondHandProperty, value);
     }
 
-    public override void Render(Avalonia.Media.DrawingContext context)
+    public override void Render(DrawingContext context)
     {
         base.Render(context);
-        _renderer.Render(context, Bounds.Size, _state, ActualThemeVariant == ThemeVariant.Dark);
+        _renderer.Render(context, Bounds.Size, _state, ShowSecondHand, ActualThemeVariant == ThemeVariant.Dark);
+    }
+
+    protected override void OnAttachedToVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnAttachedToVisualTree(e);
+        Tick();
+    }
+
+    protected override void OnDetachedFromVisualTree(VisualTreeAttachmentEventArgs e)
+    {
+        base.OnDetachedFromVisualTree(e);
+        _timer.Stop();
     }
 
     protected override Size MeasureOverride(Size availableSize)
@@ -57,9 +67,17 @@ public sealed class ClockControl : Control
         return new Size(side, side);
     }
 
-    private void OnFrame(object? sender, EventArgs e)
+    private void Tick()
     {
-        _state.Update(DateTime.Now);
+        var now = DateTime.Now;
+        _state.Update(now);
         InvalidateVisual();
+
+        // Run at frame rate only during the short second-hand jump; otherwise sleep until the next second.
+        _timer.Stop();
+        _timer.Interval = _state.IsAnimating && ShowSecondHand
+            ? FrameInterval
+            : TimeSpan.FromTicks(TimeSpan.TicksPerSecond - now.Ticks % TimeSpan.TicksPerSecond) + SecondBoundarySlack;
+        _timer.Start();
     }
 }

@@ -1,13 +1,14 @@
+using System.Diagnostics;
+
 namespace Clock2;
 
 public sealed class ClockState
 {
     private static readonly TimeSpan SecondJumpDuration = TimeSpan.FromMilliseconds(85);
 
-    private DateTime _secondJumpStartedAt;
-    private double _secondStartAngle;
-    private double _secondTargetAngle;
-    private double _settledSecondAngle;
+    private long _jumpStartedAt;
+    private double _jumpFrom;
+    private double _jumpTo;
     private int _lastSecond = -1;
 
     public double HourAngle { get; private set; }
@@ -16,71 +17,49 @@ public sealed class ClockState
 
     public double SecondAngle { get; private set; }
 
-    public bool ShowSecondHand { get; set; } = true;
+    /// <summary>True while the second hand is mid-jump and needs per-frame updates.</summary>
+    public bool IsAnimating { get; private set; }
 
     public void Update(DateTime now)
     {
         HourAngle = (now.Hour % 12) * 30.0 + now.Minute * 0.5;
         MinuteAngle = now.Minute * 6.0 + now.Second * 0.1;
 
-        if (_lastSecond < 0)
-        {
-            _lastSecond = now.Second;
-            _settledSecondAngle = now.Second * 6.0;
-            _secondStartAngle = _settledSecondAngle;
-            _secondTargetAngle = _settledSecondAngle;
-            _secondJumpStartedAt = now;
-            SecondAngle = _settledSecondAngle;
-            return;
-        }
-
         if (now.Second != _lastSecond)
         {
-            StartSecondJump(now);
+            var isNextSecond = _lastSecond >= 0 && now.Second == (_lastSecond + 1) % 60;
+            _lastSecond = now.Second;
+
+            if (!isNextSecond)
+            {
+                // First update, skipped seconds, or the clock was adjusted: snap without animating.
+                SecondAngle = now.Second * 6.0;
+                IsAnimating = false;
+                return;
+            }
+
+            // Start from where the hand currently is (even mid-jump) and take the short way round.
+            _jumpFrom = SecondAngle;
+            _jumpTo = SecondAngle + ShortestDelta(SecondAngle, now.Second * 6.0);
+            _jumpStartedAt = Stopwatch.GetTimestamp();
+            IsAnimating = true;
         }
 
-        SecondAngle = GetCurrentSecondAngle(now);
-    }
-
-    private void StartSecondJump(DateTime now)
-    {
-        var previousSecond = _lastSecond;
-        _lastSecond = now.Second;
-
-        var expectedNextSecond = (previousSecond + 1) % 60;
-        if (now.Second != expectedNextSecond)
+        if (!IsAnimating)
         {
-            _settledSecondAngle = now.Second * 6.0;
-            _secondStartAngle = _settledSecondAngle;
-            _secondTargetAngle = _settledSecondAngle;
-            _secondJumpStartedAt = now;
-            SecondAngle = _settledSecondAngle;
             return;
         }
 
-        _secondStartAngle = _settledSecondAngle;
-        _secondTargetAngle = now.Second * 6.0;
-        if (previousSecond == 59 && now.Second == 0)
-        {
-            _secondTargetAngle = 360.0;
-        }
-
-        _secondJumpStartedAt = now;
-    }
-
-    private double GetCurrentSecondAngle(DateTime now)
-    {
-        var elapsed = now - _secondJumpStartedAt;
-        var progress = Math.Clamp(elapsed.TotalMilliseconds / SecondJumpDuration.TotalMilliseconds, 0.0, 1.0);
-
+        // Monotonic time, so wall-clock adjustments can't stall the animation.
+        var progress = Stopwatch.GetElapsedTime(_jumpStartedAt) / SecondJumpDuration;
         if (progress >= 1.0)
         {
-            _settledSecondAngle = NormalizeAngle(_lastSecond * 6.0);
-            return _settledSecondAngle;
+            SecondAngle = NormalizeAngle(_jumpTo);
+            IsAnimating = false;
+            return;
         }
 
-        var eased = EaseOutBack(progress);
-        return NormalizeAngle(_secondStartAngle + (_secondTargetAngle - _secondStartAngle) * eased);
+        SecondAngle = NormalizeAngle(_jumpFrom + (_jumpTo - _jumpFrom) * EaseOutBack(progress));
     }
 
     private static double EaseOutBack(double t)
@@ -88,6 +67,21 @@ public sealed class ClockState
         const double overshoot = 0.45;
         var shifted = t - 1.0;
         return 1.0 + shifted * shifted * ((overshoot + 1.0) * shifted + overshoot);
+    }
+
+    private static double ShortestDelta(double from, double to)
+    {
+        var delta = (to - from) % 360.0;
+        if (delta < -180.0)
+        {
+            delta += 360.0;
+        }
+        else if (delta >= 180.0)
+        {
+            delta -= 360.0;
+        }
+
+        return delta;
     }
 
     private static double NormalizeAngle(double angle)
